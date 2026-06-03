@@ -2,9 +2,10 @@
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import List, Dict
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 from rich.console import Console
 
@@ -47,11 +48,12 @@ class HorizonOrchestrator:
             else None
         )
 
-    async def run(self, force_hours: int = None) -> None:
+    async def run(self, force_hours: int = None, run_label: str = None) -> None:
         """Execute the complete workflow.
 
         Args:
             force_hours: Optional override for time window in hours
+            run_label: Optional label for multiple runs on the same date
         """
         self.console.print("[bold cyan]🌅 Horizon - Starting aggregation...[/bold cyan]\n")
 
@@ -127,20 +129,25 @@ class HorizonOrchestrator:
             await self._enrich_important_items(important_items)
 
             # 7. Generate and save daily summaries for each configured language
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today, summary_key, display_date, normalized_run_label = self._build_run_context(run_label)
             for lang in self.config.ai.languages:
                 summarizer = DailySummarizer()
-                summary = await summarizer.generate_summary(important_items, today, len(all_items), language=lang)
+                summary = await summarizer.generate_summary(
+                    important_items,
+                    display_date,
+                    len(all_items),
+                    language=lang,
+                )
 
                 # Save to data/summaries/
-                summary_path = self.storage.save_daily_summary(today, summary, language=lang)
+                summary_path = self.storage.save_daily_summary(summary_key, summary, language=lang)
                 self.console.print(f"💾 Saved {lang.upper()} summary to: {summary_path}\n")
 
                 # Copy to docs/ for GitHub Pages
                 try:
                     from pathlib import Path
 
-                    post_filename = f"{today}-summary-{lang}.md"
+                    post_filename = f"{summary_key}-summary-{lang}.md"
                     posts_dir = Path("docs/_posts")
                     posts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -150,9 +157,10 @@ class HorizonOrchestrator:
                     front_matter = (
                         "---\n"
                         "layout: default\n"
-                        f"title: \"Horizon Summary: {today} ({lang.upper()})\"\n"
+                        f"title: \"Horizon Summary: {display_date} ({lang.upper()})\"\n"
                         f"date: {today}\n"
                         f"lang: {lang}\n"
+                        f"run_label: {normalized_run_label or ''}\n"
                         "---\n\n"
                     )
 
@@ -175,7 +183,7 @@ class HorizonOrchestrator:
                 if self.email_manager and self.config.email and self.config.email.enabled:
                     self.console.print(f"📧 Sending {lang.upper()} email summary...")
                     subscribers = self.storage.load_subscribers()
-                    subject = f"Horizon Summary ({lang.upper()}) - {today}"
+                    subject = f"Horizon Summary ({lang.upper()}) - {display_date}"
                     self.email_manager.send_daily_summary(summary, subject, subscribers)
 
                 # Send webhook notification if configured
@@ -184,7 +192,7 @@ class HorizonOrchestrator:
                         summary=summary,
                         important_items=important_items,
                         all_items_count=len(all_items),
-                        date=today,
+                        date=display_date,
                         lang=lang,
                         summarizer=summarizer,
                     )
@@ -224,6 +232,36 @@ class HorizonOrchestrator:
             hours = self.config.filtering.time_window_hours
             since = datetime.now(timezone.utc) - timedelta(hours=hours)
         return since
+
+    def _configured_timezone(self) -> tzinfo:
+        tz_name = getattr(self.config, "timezone", "UTC") or "UTC"
+        try:
+            return ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            self.console.print(
+                f"[yellow]Unknown timezone '{tz_name}', falling back to UTC[/yellow]"
+            )
+            return timezone.utc
+
+    @staticmethod
+    def _normalize_run_label(run_label: str = None) -> str:
+        if not run_label:
+            return ""
+
+        cleaned = "".join(
+            ch.lower() if ch.isascii() and ch.isalnum() else "-"
+            for ch in run_label.strip()
+        )
+        return "-".join(part for part in cleaned.split("-") if part)
+
+    def _build_run_context(self, run_label: str = None) -> tuple[str, str, str, str]:
+        """Return date strings used for display and stable filenames."""
+        local_now = datetime.now(self._configured_timezone())
+        today = local_now.strftime("%Y-%m-%d")
+        normalized = self._normalize_run_label(run_label)
+        summary_key = f"{today}-{normalized}" if normalized else today
+        display_date = f"{today} {normalized}" if normalized else today
+        return today, summary_key, display_date, normalized
 
     async def fetch_all_sources(self, since: datetime) -> List[ContentItem]:
         """Fetch content from all configured sources.
@@ -511,7 +549,7 @@ class HorizonOrchestrator:
             f"   Re-analyzing {len(expanded)} Twitter items with reply context...\n"
         )
         ai_client = create_ai_client(self.config.ai)
-        analyzer = ContentAnalyzer(ai_client)
+        analyzer = ContentAnalyzer(ai_client, curation=self.config.curation)
         await analyzer.analyze_batch(expanded)
 
     async def _enrich_important_items(self, items: List[ContentItem]) -> None:
@@ -544,7 +582,7 @@ class HorizonOrchestrator:
         self.console.print("🤖 Analyzing content with AI...")
 
         ai_client = create_ai_client(self.config.ai)
-        analyzer = ContentAnalyzer(ai_client)
+        analyzer = ContentAnalyzer(ai_client, curation=self.config.curation)
 
         return await analyzer.analyze_batch(items)
 

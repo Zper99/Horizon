@@ -1,5 +1,6 @@
 {
   "version": "1.0",
+  "timezone": "Asia/Shanghai",
   "ai": {
     "provider": "openai",
     "model": "gpt-4",
@@ -8,7 +9,42 @@
     "max_tokens": 4096,
     "throttle_sec": 0,
     "analysis_concurrency": 1,
-    "enrichment_concurrency": 1
+    "enrichment_concurrency": 1,
+    "languages": ["zh"]
+  },
+  "curation": {
+    "enabled": true,
+    "audience": "A reader who wants a concise daily signal for frontier technology, international affairs, and ideas that improve long-term judgement.",
+    "learning_goals": [
+      "understand durable technology and geopolitical trends",
+      "notice high-quality arguments, forecasts, and evidence",
+      "avoid low-signal viral noise"
+    ],
+    "focus_areas": [
+      "AI frontier",
+      "software and open-source infrastructure",
+      "global economy",
+      "international relations",
+      "science and productivity"
+    ],
+    "international_topics": [
+      "US-China relations",
+      "AI governance",
+      "semiconductors",
+      "energy transition",
+      "major conflicts and diplomacy"
+    ],
+    "followed_people": [
+      "karpathy",
+      "ylecun",
+      "sama"
+    ],
+    "exclude_topics": [
+      "celebrity gossip",
+      "routine product marketing",
+      "duplicate reposts without new evidence"
+    ],
+    "extra_instructions": "Prefer content that changes a thoughtful reader's map of reality. For statements by followed people, score higher when they make a substantive claim, reveal strategy, or explain a trend."
   },
   "email": {
     "enabled": false,

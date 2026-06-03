@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import src.ai.analyzer as analyzer_module
 from src.ai.analyzer import ContentAnalyzer
-from src.models import ContentItem, SourceType
+from src.models import ContentItem, CurationConfig, SourceType
 
 
 def _make_item(item_id: str) -> ContentItem:
@@ -94,3 +94,25 @@ def test_analyze_batch_concurrent_preserves_order(monkeypatch):
     result = asyncio.run(analyzer.analyze_batch(items))
 
     assert [item.id for item in result] == [item.id for item in items]
+
+
+def test_system_prompt_includes_personal_curation_profile():
+    curation = CurationConfig(
+        audience="A reader tracking frontier technology and international affairs",
+        learning_goals=["improve long-term judgement"],
+        focus_areas=["AI frontier"],
+        international_topics=["AI governance"],
+        followed_people=["karpathy"],
+        exclude_topics=["celebrity gossip"],
+        extra_instructions="Prefer evidence-backed arguments.",
+    )
+
+    analyzer = ContentAnalyzer(SimpleNamespace(), curation=curation)
+    prompt = analyzer._build_system_prompt()
+
+    assert "Personal curation profile" in prompt
+    assert "AI frontier" in prompt
+    assert "AI governance" in prompt
+    assert "karpathy" in prompt
+    assert "celebrity gossip" in prompt
+    assert "strategic judgement" in prompt

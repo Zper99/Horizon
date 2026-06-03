@@ -33,10 +33,12 @@ def test_load_config_success(tmp_path):
     config_path = tmp_path / "config.json"
     config_data = {
         "version": "1.0",
+        "timezone": "Asia/Shanghai",
         "ai": {
             "provider": "anthropic",
             "model": "claude-3-sonnet",
-            "api_key_env": "ANTHROPIC_API_KEY"
+            "api_key_env": "ANTHROPIC_API_KEY",
+            "languages": ["zh"]
         },
         "sources": {
             "hackernews": {"enabled": True}
@@ -44,6 +46,11 @@ def test_load_config_success(tmp_path):
         "filtering": {
             "ai_score_threshold": 7.0,
             "time_window_hours": 24
+        },
+        "curation": {
+            "enabled": True,
+            "focus_areas": ["AI frontier"],
+            "followed_people": ["karpathy"]
         }
     }
     config_path.write_text(json.dumps(config_data), encoding="utf-8")
@@ -51,7 +58,11 @@ def test_load_config_success(tmp_path):
     storage = StorageManager(data_dir=str(tmp_path))
     config = storage.load_config()
     assert config.version == "1.0"
+    assert config.timezone == "Asia/Shanghai"
     assert config.ai.provider == "anthropic"
+    assert config.ai.languages == ["zh"]
+    assert config.curation.focus_areas == ["AI frontier"]
+    assert config.curation.followed_people == ["karpathy"]
 
 
 class TestExpandEnvVars:

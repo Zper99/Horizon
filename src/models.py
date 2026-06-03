@@ -316,12 +316,54 @@ class FilteringConfig(BaseModel):
     time_window_hours: int = 24
 
 
+class CurationConfig(BaseModel):
+    """Personal curation preferences used by AI scoring.
+
+    This lets Horizon rank beyond a generic tech-news definition of
+    importance, while keeping the same fetch/analyze/summarize pipeline.
+    """
+
+    enabled: bool = True
+    audience: Optional[str] = None
+    learning_goals: List[str] = Field(default_factory=list)
+    focus_areas: List[str] = Field(default_factory=list)
+    international_topics: List[str] = Field(default_factory=list)
+    followed_people: List[str] = Field(default_factory=list)
+    exclude_topics: List[str] = Field(default_factory=list)
+    extra_instructions: Optional[str] = None
+
+    def to_prompt_context(self) -> str:
+        """Render non-empty preferences as compact prompt guidance."""
+        if not self.enabled:
+            return ""
+
+        lines = []
+        if self.audience:
+            lines.append(f"- Reader profile: {self.audience}")
+        if self.learning_goals:
+            lines.append(f"- Learning/growth goals: {', '.join(self.learning_goals)}")
+        if self.focus_areas:
+            lines.append(f"- Focus areas: {', '.join(self.focus_areas)}")
+        if self.international_topics:
+            lines.append(f"- International topics to watch: {', '.join(self.international_topics)}")
+        if self.followed_people:
+            lines.append(f"- People whose statements matter: {', '.join(self.followed_people)}")
+        if self.exclude_topics:
+            lines.append(f"- De-prioritize or exclude: {', '.join(self.exclude_topics)}")
+        if self.extra_instructions:
+            lines.append(f"- Additional judgement rules: {self.extra_instructions}")
+
+        return "\n".join(lines)
+
+
 class Config(BaseModel):
     """Main configuration model."""
 
     version: str = "1.0"
+    timezone: str = "UTC"
     ai: AIConfig
     sources: SourcesConfig
     filtering: FilteringConfig
+    curation: Optional[CurationConfig] = None
     email: Optional[EmailConfig] = None
     webhook: Optional[WebhookConfig] = None

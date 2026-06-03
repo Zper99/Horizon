@@ -10,7 +10,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCo
 from .client import AIClient
 from .prompts import CONTENT_ANALYSIS_SYSTEM, CONTENT_ANALYSIS_USER
 from .utils import parse_json_response
-from ..models import ContentItem
+from ..models import ContentItem, CurationConfig
 
 DEFAULT_THROTTLE_SEC = 0.0
 
@@ -18,8 +18,9 @@ DEFAULT_THROTTLE_SEC = 0.0
 class ContentAnalyzer:
     """Analyzes content items using AI to determine importance."""
 
-    def __init__(self, ai_client: AIClient):
+    def __init__(self, ai_client: AIClient, curation: Optional[CurationConfig] = None):
         self.client = ai_client
+        self.curation = curation
 
     @staticmethod
     def _parse_json_response(response: str) -> Optional[dict]:
@@ -40,6 +41,25 @@ class ContentAnalyzer:
         config = getattr(self.client, "config", None)
         concurrency = getattr(config, "analysis_concurrency", 1)
         return max(concurrency, 1)
+
+    def _build_system_prompt(self) -> str:
+        """Build the scoring prompt with optional personal curation guidance."""
+        if not self.curation:
+            return CONTENT_ANALYSIS_SYSTEM
+
+        profile = self.curation.to_prompt_context()
+        if not profile:
+            return CONTENT_ANALYSIS_SYSTEM
+
+        return (
+            f"{CONTENT_ANALYSIS_SYSTEM}\n\n"
+            "Personal curation profile:\n"
+            f"{profile}\n\n"
+            "Use this profile when scoring relevance. Score higher when an item can "
+            "improve the reader's understanding, strategic judgement, or long-term "
+            "growth in the listed areas. Score lower when an item is merely viral, "
+            "routine, or outside the profile unless it is broadly consequential."
+        )
 
     async def analyze_batch(self, items: List[ContentItem]) -> List[ContentItem]:
         throttle_sec = self._get_throttle_sec()
@@ -141,7 +161,7 @@ class ContentAnalyzer:
 
         # Get AI completion
         response = await self.client.complete(
-            system=CONTENT_ANALYSIS_SYSTEM,
+            system=self._build_system_prompt(),
             user=user_prompt,
         )
 

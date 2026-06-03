@@ -1,9 +1,8 @@
 name: Daily Horizon Summary
 
 on:
-  # schedule:
-  #   - cron: '0 0 */2 * *'  # Runs every 2 days at 00:00 UTC
-  #     timezone: 'Asia/Shanghai'
+  schedule:
+    - cron: '0 1,8 * * *'  # 09:00 and 16:00 Asia/Shanghai
   workflow_dispatch:      # Allow manual trigger
 
 jobs:
@@ -30,6 +29,17 @@ jobs:
       - name: Prepare GitHub Actions config
         run: cp data/config.github.json data/config.json
 
+      - name: Determine run window
+        run: |
+          HOUR=$(TZ=Asia/Shanghai date +'%H')
+          if [ "$HOUR" -lt 12 ]; then
+            echo "RUN_LABEL=morning" >> "$GITHUB_ENV"
+            echo "FETCH_HOURS=18" >> "$GITHUB_ENV"
+          else
+            echo "RUN_LABEL=afternoon" >> "$GITHUB_ENV"
+            echo "FETCH_HOURS=9" >> "$GITHUB_ENV"
+          fi
+
       - name: Run Horizon
         env:
           # Map secrets to environment variables expected by config.json
@@ -38,7 +48,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           LWN_KEY: ${{ secrets.LWN_KEY }}
-        run: uv run horizon --hours 48
+        run: uv run horizon --hours "$FETCH_HOURS" --run-label "$RUN_LABEL"
 
       - name: Set current date as environment variable
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV

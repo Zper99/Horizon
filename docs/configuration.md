@@ -177,6 +177,35 @@ For OpenAI-compatible gateways, Horizon sends `temperature` by default. If a new
 
 All sources are configured under the top-level `sources` key in `config.json`.
 
+## Personal Curation
+
+Use `curation` when you want the AI to rank items for your own growth and judgement, not only by generic technology-news importance.
+
+```json
+{
+  "timezone": "Asia/Shanghai",
+  "curation": {
+    "enabled": true,
+    "audience": "A reader tracking frontier technology, international affairs, and high-quality public reasoning.",
+    "learning_goals": [
+      "understand durable technology and geopolitical trends",
+      "notice high-quality arguments, forecasts, and evidence"
+    ],
+    "focus_areas": ["AI frontier", "global economy", "international relations"],
+    "international_topics": ["US-China relations", "AI governance", "semiconductors"],
+    "followed_people": ["karpathy", "ylecun", "sama"],
+    "exclude_topics": ["celebrity gossip", "routine product marketing"],
+    "extra_instructions": "Score higher when an item changes the reader's map of reality."
+  }
+}
+```
+
+- `timezone` controls the date used in generated summaries and post filenames.
+- `learning_goals`, `focus_areas`, and `international_topics` are injected into the AI scoring prompt.
+- `followed_people` tells the scorer whose substantive statements deserve extra attention. To actually fetch those statements, also add the person to a matching source such as Twitter/X, RSS, Telegram, Reddit, or GitHub.
+- `exclude_topics` lowers the score of low-value material even when it is popular.
+- `extra_instructions` is a free-form rule for your own judgement style.
+
 ### GitHub
 
 ```json
@@ -407,6 +436,14 @@ Content is scored 0-10:
 
 - `ai_score_threshold`: Only include content scoring >= this value
 - `time_window_hours`: Fetch content from last N hours
+
+For multiple briefings on the same date, pass a run label:
+
+```bash
+uv run horizon --hours 9 --run-label afternoon
+```
+
+This creates files such as `docs/_posts/2026-06-03-afternoon-summary-zh.md`, so a morning and afternoon briefing do not overwrite each other.
 
 ## Environment Variable Substitution
 
